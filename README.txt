@@ -31,7 +31,7 @@ Open a Visual Studio 2022 Developer PowerShell and run:
 
   cd "path\to\CSOPESY_Process_Scheduler"
   cl /nologo /std:c++17 /EHsc /O2 src\main.cpp src\scheduler.cpp /Fe:csopesy.exe
-  .\csopesy.exe
+  cl /nologo /std:c++17 /EHsc /O2 src\main.cpp src\scheduler.cpp /Fe:csopesy.exe
 
 The program must be run from this folder because initialize loads config.txt
 from the current working directory.
