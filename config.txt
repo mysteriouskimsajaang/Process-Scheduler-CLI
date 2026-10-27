@@ -1,0 +1,8 @@
+# Smaller processes for a quick demonstration
+num-cpu 4
+scheduler "fcfs"
+quantum-cycles 5
+batch-process-freq 10
+min-ins 12
+max-ins 24
+delays-per-exec 0

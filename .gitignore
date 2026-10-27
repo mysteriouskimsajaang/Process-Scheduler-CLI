@@ -1,0 +1,8 @@
+csopesy
+csopesy.exe
+scheduler_tests
+csopesy-log.txt
+build/
+*.o
+*.obj
+*.tmp

@@ -1,0 +1,8 @@
+# Example demonstrating nonpreemptive FCFS scheduling
+num-cpu 2
+scheduler "fcfs"
+quantum-cycles 5
+batch-process-freq 20
+min-ins 18
+max-ins 26
+delays-per-exec 1
