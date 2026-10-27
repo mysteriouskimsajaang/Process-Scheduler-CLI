@@ -6,7 +6,7 @@ Group members: Bowen Li, John Albert Teoxon, Kane Joshua Ibañez,
 Matthew Drew Fabregas
 
 Main entry point: src/main.cpp (int main)
-Language: C++17
+Language: C++
 
 SOURCE FILES
 ------------
