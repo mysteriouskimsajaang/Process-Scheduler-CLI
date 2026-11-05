@@ -59,7 +59,9 @@ void testSleepFreesCore() {
     scheduler.advanceForTest(1);
     ProcessSnapshot a,b;
     assert(scheduler.getProcess("sleeper", a) && a.status == Status::Sleeping);
-    assert(scheduler.snapshot().coresUsed == 0);
+    // The sleeper released the core and the waiting process took it right away.
+    assert(scheduler.snapshot().coresUsed == 1);
+    assert(scheduler.getProcess("next", b) && b.status == Status::Running);
     scheduler.advanceForTest(2);
     assert(scheduler.getProcess("next", b) && b.status == Status::Finished);
     scheduler.advanceForTest(5);
@@ -99,7 +101,7 @@ void testGeneratorStop() {
     cfg.batchFrequency = 3; cfg.minInstructions=4; cfg.maxInstructions=4;
     Scheduler scheduler(cfg);
     scheduler.startGenerator();
-    scheduler.advanceForTest(10);
+    scheduler.advanceForTest(3 * kTicksPerFreqUnit * 3 + 10); // 3 processes at freq 3
     auto snap = scheduler.snapshot();
     assert(snap.processes.size() == 3);
     assert(snap.processes[0].name == "p1" && snap.processes[2].name == "p3");
@@ -124,6 +126,31 @@ void testRandomInstructionBudget() {
     for (const auto& p : scheduler.snapshot().processes) assert(p.status == Status::Finished);
 }
 
+void testAlternatingPrintAdd() {
+    Config cfg; cfg.numCpu = 1; cfg.algorithm = "rr"; cfg.quantumCycles = 20;
+    cfg.minInstructions = cfg.maxInstructions = 200;
+    Scheduler scheduler(cfg);
+    std::string err;
+    assert(scheduler.createProcess("proc-01", err));
+    ProcessSnapshot p;
+    assert(scheduler.getProcess("proc-01", p));
+    assert(p.variables.count("x") && p.variables.at("x") == 0); // x exists and starts at 0
+    scheduler.advanceForTest(200);
+    assert(scheduler.getProcess("proc-01", p) && p.status == Status::Finished);
+    assert(p.logs.size() == 100); // 200 instructions = 100 x (PRINT, ADD)
+    int previous = -1;
+    for (std::size_t i = 0; i < p.logs.size(); ++i) {
+        const auto at = p.logs[i].find("Value from: ");
+        assert(at != std::string::npos);
+        const int value = std::stoi(p.logs[i].substr(at + 12));
+        if (i == 0) assert(value == 0);            // first PRINT happens before any ADD
+        else assert(value > previous && value - previous <= 10); // each ADD adds 1-10
+        previous = value;
+    }
+    // Final x = sum of the 100 ADDs, each in [1,10]
+    assert(p.variables.at("x") >= 100 && p.variables.at("x") <= 1000);
+}
+
 int main() {
     testConfig();
     testNestedLoopAndArithmetic();
@@ -132,6 +159,7 @@ int main() {
     testDelayAndParallelCores();
     testGeneratorStop();
     testRandomInstructionBudget();
+    testAlternatingPrintAdd();
     std::cout << "PASS: config, uint16 arithmetic, PRINT variable, nested FOR, SLEEP, "
                  "FCFS, RR, multi-core, execution delay, batch generation, reporting.\n";
 }

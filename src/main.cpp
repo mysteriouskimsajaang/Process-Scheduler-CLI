@@ -78,7 +78,7 @@ void showHelp() {
               << "  screen -s <name>       Create and attach to a process\n"
               << "  screen -r <name>       Reattach to a live process\n"
               << "  screen -ls             Show CPU utilization and all processes\n"
-              << "  scheduler-start        Begin periodic dummy-process generation\n"
+              << "  scheduler-start        Begin periodic dummy-process generation (alias: scheduler-test)\n"
               << "  scheduler-stop         Stop generating new dummy processes\n"
               << "  report-util            Write csopesy-log.txt (includes finished processes)\n"
               << "  exit                   Quit the emulator\n";
@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
             } else {
                 std::cout << "Usage: screen -s <name> | screen -r <name> | screen -ls\n";
             }
-        } else if (command == "scheduler-start" && !(stream >> leftover)) {
+        } else if ((command == "scheduler-start" || command == "scheduler-test") && !(stream >> leftover)) {
             scheduler->startGenerator();
             std::cout << "Scheduler process generation started.\n";
         } else if (command == "scheduler-stop" && !(stream >> leftover)) {
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
                 else std::cout << "Failed to write report.\n";
             }
         } else {
-            std::cout << "Unrecognized command. Valid commands: screen, scheduler-start, "
+            std::cout << "Unrecognized command. Valid commands: screen, scheduler-start, scheduler-test, "
                          "scheduler-stop, report-util, exit.\n";
         }
     }

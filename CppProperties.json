@@ -1,0 +1,18 @@
+{
+  "configurations": [
+    {
+      "name": "x64-Release",
+      "includePath": [ "${workspaceRoot}\\src" ],
+      "defines": [ "WIN32", "_CONSOLE" ],
+      "intelliSenseMode": "windows-msvc-x64",
+      "compilerSwitches": "/std:c++17 /EHsc"
+    },
+    {
+      "name": "x64-Debug",
+      "includePath": [ "${workspaceRoot}\\src" ],
+      "defines": [ "WIN32", "_CONSOLE", "_DEBUG" ],
+      "intelliSenseMode": "windows-msvc-x64",
+      "compilerSwitches": "/std:c++17 /EHsc"
+    }
+  ]
+}

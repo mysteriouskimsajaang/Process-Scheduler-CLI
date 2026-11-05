@@ -15,6 +15,9 @@
 namespace csopesy {
 
 constexpr int kTickMilliseconds = 20;
+// batch-process-freq N: one new dummy process every N * 200 ms (N * kTicksPerFreqUnit ticks).
+constexpr int kTicksPerFreqUnit = 200 / kTickMilliseconds;
+constexpr int kTicksPerSecond = 1000 / kTickMilliseconds;
 
 struct Config {
     int numCpu = 4;
@@ -106,8 +109,8 @@ private:
     using ProcessPtr = std::shared_ptr<Process>;
     void tickLocked();
     void createLocked(const std::string& name);
-    std::vector<Instruction> generateBlock(int budget, int depth);
-    Instruction randomLeaf();
+    // Alternating PRINT("Value from: " + x) / ADD(x, x, 1-10) program of `count` instructions.
+    std::vector<Instruction> generateAlternating(int count);
     static void flatten(const std::vector<Instruction>& input, std::vector<Instruction>& output);
     static std::uint16_t clamp16(std::int64_t x);
     static std::uint16_t valueOf(Process& process, const std::string& argument);

@@ -18,7 +18,6 @@ SOURCE FILES
   config-fcfs.txt        FCFS demonstration configuration
   CMakeLists.txt         Build configuration
   tests/                 Automated scheduler and CLI tests
-  TEST_PLAN.md           Manual demonstration checklist
   Technical_Report.pptx  Technical report presentation
 
 BUILDING AND RUNNING ON WINDOWS
@@ -27,22 +26,46 @@ Use the inner folder containing this README, src, and config.txt:
 
   D:\...\CSOPESY_Process_Scheduler
 
-Open a Visual Studio 2022 Developer PowerShell and run:
+Option A (recommended): Visual Studio / MSVC
+  1. Open "x64 Native Tools Command Prompt for VS 2022" (or the Developer
+     PowerShell) from the Start menu. A plain PowerShell does not have cl.
+  2. Run:
 
-  cd "path\to\CSOPESY_Process_Scheduler"
-  cl /nologo /std:c++17 /EHsc /O2 src\main.cpp src\scheduler.cpp /Fe:csopesy.exe
-  cl /nologo /std:c++17 /EHsc /O2 src\main.cpp src\scheduler.cpp /Fe:csopesy.exe
+       cd "path\to\CSOPESY_Process_Scheduler"
+       build-msvc.bat
 
-The program must be run from this folder because initialize loads config.txt
-from the current working directory.
+     or, equivalently:
 
-If csopesy.exe has already been built, run only:
+       cl /nologo /std:c++17 /EHsc /O2 src\main.cpp src\scheduler.cpp /Fe:csopesy.exe
+
+Option B: MinGW-w64 g++ (build.bat)
+  Requires g++ 9 or newer with POSIX threads. Old MinGW builds (for example
+  the one bundled with Dev-C++ or Code::Blocks, or any g++ whose "g++ --version"
+  is older than 9) fail with errors such as "'mutex' in namespace 'std' does
+  not name a type" and "'clamp' is not a member of 'std'". To install a
+  suitable compiler:
+    1. Install MSYS2 from https://www.msys2.org
+    2. In the "MSYS2 UCRT64" terminal run:
+         pacman -S mingw-w64-ucrt-x86_64-gcc
+    3. Add C:\msys64\ucrt64\bin to the FRONT of your Windows PATH.
+    4. Open a new terminal, check "g++ --version", then run:
+         cd "path\to\CSOPESY_Process_Scheduler"
+         .\build.bat
+
+Run the program from this folder, because initialize loads config.txt from the
+current working directory:
 
   cd "path\to\CSOPESY_Process_Scheduler"
   .\csopesy.exe
 
-The included build.bat is an optional MinGW-w64 build script. It requires a
-modern g++ installation and is not needed when using Visual Studio MSVC.
+If csopesy.exe was already built from the current source, skip the build step.
+After changing any file in src\, rebuild; an old csopesy.exe does not pick up
+source changes.
+
+BUILDING ON LINUX / MACOS
+-------------------------
+  ./build.sh
+  ./csopesy
 
 BUILDING WITH CMAKE
 -------------------
@@ -67,12 +90,18 @@ initialize reads config.txt. The file uses space-separated key/value pairs:
   max-ins 2000
   delays-per-exec 0
 
+The delay setting may be written as delays-per-exec or delay-per-exec (both are
+accepted, but use only one of them in a file).
+
+batch-process-freq N means scheduler-start / scheduler-test creates one new dummy
+process every N * 200 ms (one simulated CPU tick is 20 ms, so N = 10 ticks).
+
 The scheduler can be:
 
   scheduler "rr"       Round Robin
   scheduler "fcfs"     First-Come, First-Served
 
-The current config.txt is a short FCFS demonstration configuration. Change
+The current config.txt is the round-robin assignment demonstration configuration. Change
 only config.txt to test other instructor-provided parameters; recompilation is
 not required.
 
@@ -83,8 +112,10 @@ Before initialize, only initialize and exit are accepted.
   initialize             Load config.txt and start the scheduler
   screen -s NAME         Create and attach to a new process
   screen -r NAME         Reattach to an active process
-  screen -ls              List CPU utilization and processes
+  screen -ls             List CPU utilization, running processes (those on a
+                         core) and finished processes
   scheduler-start        Start periodic dummy-process generation
+                         (scheduler-test is accepted as an alias)
   scheduler-stop         Stop generating new processes
   report-util            Write csopesy-log.txt
   exit                   Quit the emulator
@@ -119,8 +150,7 @@ and summaries of active and finished processes.
 
 TESTING
 -------
-Use TEST_PLAN.md as the manual checklist for the required demonstrations.
-The assignment's MP4 evidence should show the configuration, commands, output,
+For the required demonstrations, the assignment's MP4 evidence should show the configuration, commands, output,
 and csopesy-log.txt when required by the instructor.
 
 The optional automated tests can be built with a C++17 compiler:
@@ -129,14 +159,9 @@ The optional automated tests can be built with a C++17 compiler:
       tests\scheduler_tests.cpp src\scheduler.cpp -Isrc -o scheduler_tests.exe
   .\scheduler_tests.exe
 
-SUBMISSION
-----------
-Prepare the following according to the assignment instructions:
+(or, with MSVC:
+  cl /nologo /std:c++17 /EHsc /O2 /Isrc tests\scheduler_tests.cpp src\scheduler.cpp /Fe:scheduler_tests.exe)
 
-  1. Source code and configuration files
-  2. This README.txt with group and run information
-  3. Technical_Report.pptx
-  4. MP4 evidence for the assigned test cases
+Run the tests from this folder: they load config-demo.txt from the current
+directory.
 
-The Windows csopesy.exe file is optional; the source code is the primary
-submission.

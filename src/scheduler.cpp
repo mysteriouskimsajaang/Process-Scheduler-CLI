@@ -39,7 +39,7 @@ bool Config::load(const std::string& filename, Config& out, std::string& error) 
     int lineNo = 0;
     const std::unordered_set<std::string> validKeys = {
         "num-cpu", "scheduler", "quantum-cycles", "batch-process-freq",
-        "min-ins", "max-ins", "delays-per-exec"
+        "min-ins", "max-ins", "delay-per-exec", "delays-per-exec"
     };
     while (std::getline(file, line)) {
         ++lineNo;
@@ -63,10 +63,20 @@ bool Config::load(const std::string& filename, Config& out, std::string& error) 
         }
     }
     for (const auto& key : validKeys) {
+        // "delay-per-exec" and "delays-per-exec" are aliases: either one is enough.
+        if (key == "delay-per-exec" || key == "delays-per-exec") continue;
         if (!settings.count(key)) {
             error = "Missing required setting '" + key + "'.";
             return false;
         }
+    }
+    if (!settings.count("delay-per-exec") && !settings.count("delays-per-exec")) {
+        error = "Missing required setting 'delay-per-exec'.";
+        return false;
+    }
+    if (settings.count("delay-per-exec") && settings.count("delays-per-exec")) {
+        error = "Specify only one of 'delay-per-exec' or 'delays-per-exec'.";
+        return false;
     }
     auto readInt = [&](const std::string& key, int low, int high, int& dest) -> bool {
         const auto& raw = settings.at(key);
@@ -90,7 +100,9 @@ bool Config::load(const std::string& filename, Config& out, std::string& error) 
         !readInt("batch-process-freq", 1, 1000000, parsed.batchFrequency) ||
         !readInt("min-ins", 1, 1000000, parsed.minInstructions) ||
         !readInt("max-ins", 1, 1000000, parsed.maxInstructions) ||
-        !readInt("delays-per-exec", 0, 1000000, parsed.delaysPerExec)) return false;
+        !(settings.count("delay-per-exec")
+              ? readInt("delay-per-exec", 0, 1000000, parsed.delaysPerExec)
+              : readInt("delays-per-exec", 0, 1000000, parsed.delaysPerExec))) return false;
     if (parsed.minInstructions > parsed.maxInstructions) {
         error = "min-ins must be less than or equal to max-ins.";
         return false;
@@ -182,57 +194,25 @@ bool Scheduler::createProcess(const std::string& name, std::string& error) {
     return true;
 }
 
-Instruction Scheduler::randomLeaf() {
-    Instruction inst;
-    const int kind = uniform(random_, 0, 99);
-    static const char* variables[] = {"x", "y", "z", "count", "total"};
-    auto operand = [&]() -> std::string {
-        if (uniform(random_, 0, 1)) return variables[uniform(random_, 0, 4)];
-        return std::to_string(uniform(random_, 0, 500));
-    };
-    if (kind < 38) {
-        inst.op = Op::Print;
-        // Per assignment, default text: "Hello world from <process_name>!".
-    } else if (kind < 55) {
-        inst.op = Op::Declare;
-        inst.a = variables[uniform(random_, 0, 4)];
-        inst.b = std::to_string(uniform(random_, 0, 65535));
-    } else if (kind < 73) {
-        inst.op = Op::Add;
-        inst.a = variables[uniform(random_, 0, 4)];
-        inst.b = operand(); inst.c = operand();
-    } else if (kind < 91) {
-        inst.op = Op::Subtract;
-        inst.a = variables[uniform(random_, 0, 4)];
-        inst.b = operand(); inst.c = operand();
-    } else {
-        inst.op = Op::Sleep;
-        inst.ticks = uniform(random_, 1, 5); // uint8-compatible
-    }
-    return inst;
-}
-
-std::vector<Instruction> Scheduler::generateBlock(int budget, int depth) {
+std::vector<Instruction> Scheduler::generateAlternating(int count) {
     std::vector<Instruction> result;
-    while (budget > 0) {
-        // FOR is a true hierarchical instruction, with nested loops to depth 3.
-        // The instruction budget measures executed leaf instructions.
-        if (depth < 3 && budget >= 4 && uniform(random_, 0, 99) < 15) {
-            const int repeats = uniform(random_, 2, 3);
-            const int maxBody = std::min(6, budget / repeats);
-            if (maxBody >= 1) {
-                const int bodyCost = uniform(random_, 1, maxBody);
-                Instruction loop;
-                loop.op = Op::For;
-                loop.repeats = repeats;
-                loop.body = generateBlock(bodyCost, depth + 1);
-                result.push_back(std::move(loop));
-                budget -= bodyCost * repeats;
-                continue;
-            }
+    result.reserve(static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        Instruction inst;
+        if (i % 2 == 0) {
+            // PRINT("Value from: " + x)
+            inst.op = Op::Print;
+            inst.a = "Value from: ";
+            inst.b = "x";
+            inst.printVariable = true;
+        } else {
+            // ADD(x, x, [1 - 10])
+            inst.op = Op::Add;
+            inst.a = "x";
+            inst.b = "x";
+            inst.c = std::to_string(uniform(random_, 1, 10));
         }
-        result.push_back(randomLeaf());
-        --budget;
+        result.push_back(std::move(inst));
     }
     return result;
 }
@@ -253,7 +233,8 @@ void Scheduler::createLocked(const std::string& name) {
     process->pid = nextPid_++;
     process->createdAt = std::chrono::system_clock::now();
     const int instructions = uniform(random_, config_.minInstructions, config_.maxInstructions);
-    const auto program = generateBlock(instructions, 0);
+    const auto program = generateAlternating(instructions);
+    process->variables["x"] = 0; // every process starts with x = 0
     process->executedInstructions.reserve(static_cast<std::size_t>(instructions));
     flatten(program, process->executedInstructions);
     byName_.emplace(process->name, process);
@@ -343,7 +324,7 @@ void Scheduler::tickLocked() {
         std::string name;
         do { name = "p" + std::to_string(nextGeneratedName_++); } while (byName_.count(name));
         createLocked(name);
-        nextGenerationTick_ = tick_ + static_cast<std::uint64_t>(config_.batchFrequency);
+        nextGenerationTick_ = tick_ + static_cast<std::uint64_t>(config_.batchFrequency) * kTicksPerFreqUnit;
     }
     for (auto& p : createdOrder_) {
         if (p->status == Status::Sleeping && p->wakeTick <= tick_) {
@@ -377,6 +358,11 @@ void Scheduler::tickLocked() {
             ready_.push_back(p);
             freeCore(core);
         }
+    }
+    // Refill cores freed this tick (quantum expiry, sleep, finish) so that a
+    // snapshot taken between ticks never sees idle cores while work is ready.
+    for (int core = 0; core < config_.numCpu; ++core) {
+        if (!cores_[static_cast<std::size_t>(core)]) assignCore(core);
     }
 }
 
@@ -420,7 +406,7 @@ void Scheduler::startGenerator() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!generating_) {
         generating_ = true;
-        nextGenerationTick_ = tick_ + static_cast<std::uint64_t>(config_.batchFrequency);
+        nextGenerationTick_ = tick_ + static_cast<std::uint64_t>(config_.batchFrequency) * kTicksPerFreqUnit;
     }
 }
 
@@ -459,7 +445,8 @@ std::string systemReport(const SystemSnapshot& snap) {
         << "Running processes:\n";
     bool hasActive = false;
     for (const auto& p : snap.processes) {
-        if (p.status == Status::Finished) continue;
+        // Only processes currently on a core; READY/SLEEPING ones are queued, not running.
+        if (p.status != Status::Running) continue;
         hasActive = true;
         out << std::left << std::setw(18) << p.name << " (" << formatTime(p.createdAt) << ")  "
             << std::setw(10) << statusText(p.status) << " Core: ";
